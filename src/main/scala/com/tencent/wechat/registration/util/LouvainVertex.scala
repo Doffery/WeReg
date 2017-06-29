@@ -12,7 +12,7 @@ class LouvainVertex (var community: Long,
     var changed: Boolean,
     var preCommunity: Long) extends Serializable with KryoSerializable {
   
-    def this() = this(-1L, 0L, 0L, 0L, false, -1)
+    def this() = this(-1L, 0, 0, 0, false, -1)
     
     override def toString(): String = {
         "{community:"+community+",communitySigmaTot:"+communitySigmaTot+

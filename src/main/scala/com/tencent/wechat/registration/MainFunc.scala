@@ -6,12 +6,14 @@ import org.apache.spark.graphx.Graph
 import com.tencent.wechat.registration.algo.LouvainMethod
 import com.tencent.wechat.registration.algo.GraphBuilder
 import org.apache.spark.SparkContext
+import com.tencent.wechat.registration.util.DataFileType
 
 
 case class RConfig (
     inputFile      :String = "",
     outputFile     :String = "",
     testInputFile  :String = "",
+    dataFileType   :DataFileType.Value = DataFileType.DataVisor,
     master         :String = "local",
     appName        :String = "TryLouvain",
     parallelism    :Int = -1,
@@ -22,13 +24,12 @@ case class RConfig (
 
 object MainFunc {
     def main(args: Array[String]): Unit ={
-        val config      = RConfig("file:///root/data/plusid_t_tmp_wxregister_alldata_20170604.csv",
+        val config      = RConfig("file:///root/data/tip_plusid_t_tmp_reg_data_sync_to_data_visor_20170604.txt",
                                   "file:///root/output/output" + System.currentTimeMillis.toString(),
                                   "file:///root/data/test_small_edges.csv"
                                   )
         val conf        = new SparkConf().setAppName(config.appName)
                                          .setMaster("local[*]")
-                                         .set("spark.driver.memory", "4g")
         val sc          = new SparkContext(conf)
         
         val (graph, idMaps) = GraphBuilder.buildGraph(sc, config)

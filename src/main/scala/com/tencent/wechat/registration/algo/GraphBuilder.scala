@@ -15,11 +15,6 @@ import com.tencent.wechat.registration.util.UserBriefData
 
 object GraphBuilder {
   
-    def weightCal(u1: UserRegData, u2: UserRegData) : Long = {
-      
-        1L
-    }
-  
     def makeEdge(s: String, data: Iterable[UserRegData]) : TraversableOnce[Edge[Long]] = {
         var u       = data.iterator
         var uu      = data.iterator
@@ -35,9 +30,12 @@ object GraphBuilder {
                 //println("**Checking**" + value1.id)
                 val value2    = uu.next()
                 if(value2.id != value1.id) {
-                    val weight = weightCal(value1, value2)
-                    if(weight != 0)
-                        res += new Edge(value1.shortId, value2.shortId, weight)
+                    val weight = WeightStrategy.weightCal(value1, value2)
+                    if(weight < 1) {
+                        if(value1.shortId < value2.shortId)
+                            res += new Edge(value1.shortId, value2.shortId, weight)
+                        else res += new Edge(value2.shortId, value1.shortId, weight)
+                    }
                     //println("**MAKE EDGE** " + value1.id + "\t--to--\t" + value2.id)
                 }
             }
@@ -84,7 +82,7 @@ object GraphBuilder {
        //def typeConversionMethod = {String => Long = _.toLong}
        val node_neightbors = ip_partition.flatMap( t => makeEdge(t._1, t._2) )
                                          .union(device_partition.flatMap( t => makeEdge(t._1, t._2) ))
-                                         .union(wifi_partition.flatMap( t => makeEdge(t._1, t._2) ))
+                                         .union(wifi_partition.flatMap( t => makeEdge(t._1, t._2) )).distinct()
        (Graph.fromEdges(node_neightbors, 0L), idmaps)
        //.outerJoinVertices(vertices)(
        //(vid, data, att) => {
@@ -97,15 +95,15 @@ object GraphBuilder {
         config : RConfig): (Graph[Long, Long], RDD[(Long, UserBriefData)]) = {
         val textFile = sc.textFile(config.testInputFile).cache()
         val node_neightbors = textFile.map(row => {
-          val tokens = row.split(config.delimiter).map(_.trim())
-          def typeConversionMethod: String => Long = _.toLong
-          tokens.length match {
-            case 2 => new Edge(typeConversionMethod(tokens(0)),
-              typeConversionMethod(tokens(1)), 1L)
-            case 3 => new Edge(typeConversionMethod(tokens(0)),
-              typeConversionMethod(tokens(1)), tokens(2).toLong)
-            case _ => throw new IllegalArgumentException("invalid input line: " + row)
-          }
+            val tokens = row.split(config.delimiter).map(_.trim())
+            def typeConversionMethod: String => Long = _.toLong
+            tokens.length match {
+                case 2 => new Edge(typeConversionMethod(tokens(0)),
+                  typeConversionMethod(tokens(1)), 1L)
+                case 3 => new Edge(typeConversionMethod(tokens(0)),
+                  typeConversionMethod(tokens(1)), tokens(2).toLong)
+                case _ => throw new IllegalArgumentException("invalid input line: " + row)
+            }
         })
         val idmaps = node_neightbors.flatMap(edge => {
             var nodes = new ArrayBuffer[(Long, UserBriefData)]()
