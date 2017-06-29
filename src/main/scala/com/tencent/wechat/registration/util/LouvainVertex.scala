@@ -9,28 +9,35 @@ class LouvainVertex (var community: Long,
     var communitySigmaTot: Long,
     var internalWeight: Long,
     var nodeWeight: Long,
-    var changed: Boolean) extends Serializable with KryoSerializable {
+    var changed: Boolean,
+    var preCommunity: Long) extends Serializable with KryoSerializable {
   
-    def this() = this(-1L, 0L, 0L, 0L, false)
+    def this() = this(-1L, 0L, 0L, 0L, false, -1)
     
     override def toString(): String = {
-      "{community:"+community+",communitySigmaTot:"+communitySigmaTot+
-      ",internalWeight:"+internalWeight+",nodeWeight:"+nodeWeight+"}"
+        "{community:"+community+",communitySigmaTot:"+communitySigmaTot+
+        ",internalWeight:"+internalWeight+",nodeWeight:"+nodeWeight+
+        ",preCommunity:"+preCommunity+"}"
+        //userData.toString() + "}"
     }
     
     override def write(kryo: Kryo, output: Output): Unit = {
-      kryo.writeObject(output, this.community)
-      kryo.writeObject(output, this.communitySigmaTot)
-      kryo.writeObject(output, this.internalWeight)
-      kryo.writeObject(output, this.nodeWeight)
-      kryo.writeObject(output, this.changed)
+        kryo.writeObject(output, this.community)
+        kryo.writeObject(output, this.communitySigmaTot)
+        kryo.writeObject(output, this.internalWeight)
+        kryo.writeObject(output, this.nodeWeight)
+        kryo.writeObject(output, this.changed)
+        kryo.writeObject(output, this.preCommunity)
+        //kryo.writeObject(output, this.userData)
     }
   
     override def read(kryo: Kryo, input: Input): Unit = {
-      this.community = kryo.readObject(input, classOf[Long])
-      this.communitySigmaTot = kryo.readObject(input, classOf[Long])
-      this.internalWeight = kryo.readObject(input, classOf[Long])
-      this.nodeWeight = kryo.readObject(input, classOf[Long])
-      this.changed = kryo.readObject(input, classOf[Boolean])
+        this.community = kryo.readObject(input, classOf[Long])
+        this.communitySigmaTot = kryo.readObject(input, classOf[Long])
+        this.internalWeight = kryo.readObject(input, classOf[Long])
+        this.nodeWeight = kryo.readObject(input, classOf[Long])
+        this.changed = kryo.readObject(input, classOf[Boolean])
+        this.preCommunity = kryo.readObject(input, classOf[Long])
+        //this.userData = kryo.readObject(input, classOf[UserBriefData])
     }
 }

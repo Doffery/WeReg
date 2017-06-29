@@ -17,21 +17,27 @@ import com.tencent.wechat.registration.util.LouvainVertex
 import org.apache.spark.graphx.Edge
 import com.tencent.wechat.registration.util.LouvainVertex
 import com.tencent.wechat.registration.util.LouvainVertex
+import com.tencent.wechat.registration.util.UserRegData
+import com.tencent.wechat.registration.util.UserBriefData
+import org.apache.spark.rdd.RDD
+import com.tencent.wechat.registration.util.UserBriefData
 
 class LouvainMethod extends Serializable{
-    def buildLouvainGraph[VD : ClassTag](graph : Graph[VD, Long]): Graph[LouvainVertex, Long] = {
+    def buildLouvainGraph[VD: ClassTag](graph : Graph[VD, Long]): Graph[LouvainVertex, Long] = {
         val weights    = graph.aggregateMessages(
             (e: EdgeContext[VD, Long, Long]) => {
               e.sendToSrc(e.attr)
               e.sendToDst(e.attr)
             },
             (msg1: Long, msg2: Long) => msg1 + msg2)
+            
+        // The last groupEdges groups the duplicate edges and add them up
         graph.outerJoinVertices(weights)(
             (vid, data, att) => {
                 val weight  = att.getOrElse(0L)
-                new LouvainVertex(vid, weight, 0, weight, false)
+                new LouvainVertex(vid, weight, 0, weight, false, vid)
             }
-            ).partitionBy(PartitionStrategy.EdgePartition2D)
+            ).partitionBy(PartitionStrategy.EdgePartition2D).groupEdges(_+_)
     }
     
 
@@ -117,6 +123,7 @@ class LouvainMethod extends Serializable{
             val startingCommunityId = bestCommunity
             var maxDeltaQ = BigDecimal(0.0);
             var bestSigmaTot = 0L
+            // louvainData.preCommunity = louvainData.community // not here
       
             // VertexRDD[scala.collection.immutable.Map[(Long, Long),Long]]
             // e.g. (1,Map((3,10) -> 2, (6,4) -> 2, (2,8) -> 2, (4,8) -> 2, (5,8) -> 2))
@@ -168,7 +175,12 @@ class LouvainMethod extends Serializable{
         minProgress: Int = 1,
         progressCounter: Int = 1): (Double, Graph[LouvainVertex, Long], Int) = {
         
-        var louvainGraph = graph.cache()
+        // record the last community id
+        var louvainGraph = graph.mapVertices((vid, lv) => {
+            lv.preCommunity = lv.community
+            lv
+        }).cache()
+        println("Graph in memory now!")
         var graphWeight  = louvainGraph.vertices.values.map(v => v.internalWeight + v.nodeWeight).reduce(_+_)
         var totalWeight = sc.broadcast(graphWeight)
         println("totalEdgeWeight: "+totalWeight.value)
@@ -200,6 +212,8 @@ class LouvainMethod extends Serializable{
             val labeledVertices = louvainVertJoin(louvainGraph, communityRDD,
                 totalWeight, even).cache()
       
+            println("Finish louvain Join.")
+            
             // calculate new sigma total value for each community (total weight
             // of each community)
             val communityUpdate = labeledVertices
@@ -207,12 +221,16 @@ class LouvainMethod extends Serializable{
                   vdata.internalWeight)})
                 .reduceByKey(_ + _).cache()
       
+            println("Got the sigma values.")
+                
             // map each vertex ID to its updated community information
             val communityMapping = labeledVertices
                 .map({ case (vid, vdata) => (vdata.community, vid)})
                 .join(communityUpdate)
                 .map({ case (community, (vid, sigmaTot)) => (vid, (community, sigmaTot))})
                 .cache()
+                
+            println("Caled the new community information.")
       
             // join the community labeled vertices with the updated community info
             val updatedVertices = labeledVertices.join(communityMapping).map({
@@ -222,6 +240,8 @@ class LouvainMethod extends Serializable{
                     louvainData.communitySigmaTot = communitySigmaTot
                     (vertexId, louvainData)
             }).cache()
+            
+            println("Updated the vertices info.")
       
             updatedVertices.count()
             labeledVertices.unpersist(blocking = false)
@@ -253,8 +273,8 @@ class LouvainMethod extends Serializable{
             if (!even) {
                 println("  # vertices moved: " + java.text.NumberFormat.getInstance().format(updated))
         
-                if (updated >= updatedLastPhase - minProgress) stop += 1
-        
+                //if (updated >= updatedLastPhase - minProgress) stop += 1
+                if (updated < minProgress) stop += 1
                 updatedLastPhase = updated
             }
             
@@ -367,7 +387,7 @@ class LouvainMethod extends Serializable{
     }
   
 
-    def finalSave(
+    def saveLevel(
         sc: SparkContext,
         config: RConfig,
         level: Int,
@@ -378,22 +398,38 @@ class LouvainMethod extends Serializable{
         val edgeSavePath = config.outputFile + "/level_" + level + "_edges"
     
         // save
-        graph.vertices.saveAsTextFile(vertexSavePath)
+        graph.vertices.groupBy( t => t._2.community).saveAsTextFile(vertexSavePath)
         graph.edges.saveAsTextFile(edgeSavePath)
     
         // overwrite the q values at each level
         sc.parallelize(qValues, 1).saveAsTextFile(config.outputFile + "/qvalues_" + level)
     }
+
+    def finalSave(
+        sc: SparkContext,
+        config: RConfig,
+        idMaps : RDD[(Long, UserBriefData)]) = {
+      
+        idMaps.groupByKey().saveAsTextFile(config.outputFile+"/final")
+    }
     
-    def run[VD : ClassTag](graph : Graph[VD, Long], sc : SparkContext, config : RConfig): Unit = {
+    def run[VD : ClassTag](
+        graph : Graph[VD, Long], 
+        idMaps : RDD[(Long, UserBriefData)],
+        sc : SparkContext, 
+        config : RConfig): Unit = {
         var louvainGraph    = buildLouvainGraph(graph)
+        val vertexCount     = louvainGraph.vertices.count()
+        val edgeCount       = louvainGraph.edges.count()
+        println(s"#Vertix: $vertexCount")
+        println(s"#Edges: $edgeCount")
         
         var compressionLevel = -1 // number of times the graph has been compressed
         var qModularityValue = -1.0 // current modularity value
         var halt = false
     
         var qValues: Array[(Int, Double)] = Array()
-    
+        var userCommunityMap = idMaps
         do {
             compressionLevel += 1
             println(s"\nStarting Louvain level $compressionLevel")
@@ -402,14 +438,22 @@ class LouvainMethod extends Serializable{
             val (currentQModularityValue, currentGraph, numberOfPasses) =
                 findCommunity(sc, louvainGraph, config.minProgress, config.progressCounter)
       
+                               
             louvainGraph.unpersistVertices(blocking = false)
             louvainGraph = currentGraph
+            
+            // update the user community mapping
+            val communityMapping = louvainGraph.vertices.map({case (vid, lv) =>
+                (lv.preCommunity, lv.community)})
+            userCommunityMap = communityMapping
+                               .join(userCommunityMap)
+                               .map({case (preId, (newCommunity, uData)) => (newCommunity, uData)})
       
             println(s"qValue: $currentQModularityValue")
       
             qValues = qValues :+ ((compressionLevel, currentQModularityValue))
       
-            //saveLevel(sc, config, compressionLevel, qValues, louvainGraph)
+            saveLevel(sc, config, compressionLevel, qValues, louvainGraph)
       
             // If modularity was increased by at least 0.001 compress the graph and repeat
             // halt immediately if the community labeling took less than 3 passes
@@ -423,6 +467,6 @@ class LouvainMethod extends Serializable{
             }
       
         } while (!halt)
-        finalSave(sc, config, compressionLevel, qValues, louvainGraph)
+        finalSave(sc, config, userCommunityMap)
     }
 }

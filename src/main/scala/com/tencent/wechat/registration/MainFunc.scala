@@ -11,6 +11,7 @@ import org.apache.spark.SparkContext
 case class RConfig (
     inputFile      :String = "",
     outputFile     :String = "",
+    testInputFile  :String = "",
     master         :String = "local",
     appName        :String = "TryLouvain",
     parallelism    :Int = -1,
@@ -21,15 +22,18 @@ case class RConfig (
 
 object MainFunc {
     def main(args: Array[String]): Unit ={
-        val config      = RConfig("file:///D:/data/plusid_t_tmp_wxregister_alldata_20170604.csv",
-            "file:///D:/data/output" + System.currentTimeMillis.toString())
+        val config      = RConfig("file:///root/data/plusid_t_tmp_wxregister_alldata_20170604.csv",
+                                  "file:///root/output/output" + System.currentTimeMillis.toString(),
+                                  "file:///root/data/test_small_edges.csv"
+                                  )
         val conf        = new SparkConf().setAppName(config.appName)
                                          .setMaster("local[*]")
-                                         .set("spark.executor.memory", "6g")
+                                         .set("spark.driver.memory", "4g")
         val sc          = new SparkContext(conf)
         
-        val graph       = GraphBuilder.buildGraph(sc, config)
+        val (graph, idMaps) = GraphBuilder.buildGraph(sc, config)
+        //val (graph, idMaps) = GraphBuilder.buildTestGraph(sc, config)
         val louvain     = new LouvainMethod()
-        louvain.run(graph, sc, config);
+        louvain.run(graph, idMaps, sc, config);
     }
 }

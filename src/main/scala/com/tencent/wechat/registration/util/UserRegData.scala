@@ -8,12 +8,12 @@ import com.esotericsoftware.kryo.Kryo
 import com.esotericsoftware.kryo.io.Input
 
 class UserRegData(s: String) extends Serializable with KryoSerializable {
-    var shortId:       Long   = 0L
+    var shortId:        scala.Long   = 0L
     var id:				      String = ""
-    var clientVersion:  Long   = 0L
+    var clientVersion:  scala.Long   = 0L
     var clientIp:       String = ""
     var agentIp:        String = ""
-    var timestamp:      Long   = 0L
+    var timestamp:      scala.Long   = 0L
     var phonePrefix:    String = ""
     var timezone:       String = ""
     var lang:           String = ""
@@ -43,30 +43,32 @@ class UserRegData(s: String) extends Serializable with KryoSerializable {
 
     
     //println(s)
-    val ssplit = s.split("\t", -1);
-    this.id = ssplit(0);
-    this.clientVersion = Long.parseLong(ssplit(1));
-    this.clientIp = IPParse.ipParse(ssplit(2));
-    this.timestamp = Long.parseLong(ssplit(4));
-    this.phonePrefix = ssplit(5);
-    this.nickName = ssplit(8);
-    this.adsource = ssplit(14);
-    this.androidId = ssplit(15);
-    this.macAdd = ssplit(16);
-    this.deviceId = ssplit(20);
-    this.deviceType = ssplit(21);
-    this.pwdHash = ssplit(22);
-    this.phoneCountry = (ssplit(24));
-    this.phoneProvince = (ssplit(25));
-    this.phoneCity = (ssplit(26));
-    this.ipCountry = (ssplit(27));
-    this.ipProvince = (ssplit(28));
-    this.ipCity = (ssplit(29));
-    this.imei = ssplit(30);
-    this.ssid = ssplit(34);
-    this.ssidMac = ssplit(35);
-    this.shortId = Long.parseLong(ssplit.last)
-    //println("success")
+    if(s != "") {
+        val ssplit = s.split("\t", -1);
+        this.id = ssplit(0);
+        this.clientVersion = Long.parseLong(ssplit(1));
+        this.clientIp = IPParse.ipParse(ssplit(2));
+        this.timestamp = Long.parseLong(ssplit(4));
+        this.phonePrefix = ssplit(5);
+        this.nickName = ssplit(8);
+        this.adsource = ssplit(14);
+        this.androidId = ssplit(15);
+        this.macAdd = ssplit(16);
+        this.deviceId = ssplit(20);
+        this.deviceType = ssplit(21);
+        this.pwdHash = ssplit(22);
+        this.phoneCountry = (ssplit(24));
+        this.phoneProvince = (ssplit(25));
+        this.phoneCity = (ssplit(26));
+        this.ipCountry = (ssplit(27));
+        this.ipProvince = (ssplit(28));
+        this.ipCity = (ssplit(29));
+        this.imei = ssplit(30);
+        this.ssid = ssplit(34);
+        this.ssidMac = ssplit(35);
+        this.shortId = Long.parseLong(ssplit.last)
+        //println("success")
+    }
     
     override def write(kryo: Kryo, output: Output): Unit = {
       kryo.writeObject(output, this.id)
