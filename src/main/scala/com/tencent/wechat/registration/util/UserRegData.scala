@@ -1,11 +1,11 @@
 package com.tencent.wechat.registration.util
 
-import com.tencent.wechat.registration.preprocessing.IPParse
 import java.lang.Long
 import com.esotericsoftware.kryo.KryoSerializable
 import com.esotericsoftware.kryo.io.Output
 import com.esotericsoftware.kryo.Kryo
 import com.esotericsoftware.kryo.io.Input
+import com.tencent.wechat.registration.preprocessing.DataCleaning
 
 
 class UserRegData(
@@ -44,7 +44,6 @@ class UserRegData(
     var ssid:           String = ""
     var ssidMac:        String = ""
     
-    def this(s: String) = this(s, DataFileType.Full)
     
     //println(s)
     
@@ -53,7 +52,7 @@ class UserRegData(
         if(dType == DataFileType.Full) {
             this.id = ssplit(0);
             this.clientVersion = Long.parseLong(ssplit(1));
-            this.clientIp = IPParse.ipParse(ssplit(2));
+            this.clientIp = DataCleaning.ipParse(ssplit(2));
             this.timestamp = Long.parseLong(ssplit(4));
             this.phonePrefix = ssplit(5);
             this.nickName = ssplit(8);
@@ -61,7 +60,7 @@ class UserRegData(
             this.androidId = ssplit(15);
             this.macAdd = ssplit(16);
             this.deviceId = ssplit(20);
-            this.deviceType = ssplit(21);
+            this.deviceType = DataCleaning.deviceTypeCleaning(ssplit(21))
             this.pwdHash = ssplit(22);
             this.phoneCountry = (ssplit(24));
             this.phoneProvince = (ssplit(25));
@@ -76,41 +75,41 @@ class UserRegData(
         } else if(dType == DataFileType.DataVisor) {
             this.id = ssplit(1);
             this.timestamp = Long.parseLong(ssplit(2));
-            this.clientIp = IPParse.ipParse(ssplit(4));
+            this.clientIp = DataCleaning.ipParse(ssplit(4));
             this.clientVersion = Long.parseLong(ssplit(5));
-            this.phonePrefix = ssplit(6);
+            this.phonePrefix = DataCleaning.phonePrefix(ssplit(6))
             this.nickName = ssplit(10);
             this.ssidMac = ssplit(12);
             this.deviceId = ssplit(14);
-            this.deviceType = ssplit(16)
+            this.deviceType = DataCleaning.deviceTypeCleaning(ssplit(16))
             this.shortId = Long.parseLong(ssplit.last)
         }
         //println("success")
     }
     
     override def write(kryo: Kryo, output: Output): Unit = {
-      kryo.writeObject(output, this.id)
-      kryo.writeObject(output, this.clientVersion)
-      kryo.writeObject(output, this.clientIp)
-      kryo.writeObject(output, this.timestamp)
-      kryo.writeObject(output, this.phonePrefix)
-      kryo.writeObject(output, this.nickName)
-      kryo.writeObject(output, this.deviceId)
-      kryo.writeObject(output, this.deviceType)
-      kryo.writeObject(output, this.ssidMac)
-      kryo.writeObject(output, this.shortId)
+        kryo.writeObject(output, this.id)
+        kryo.writeObject(output, this.clientVersion)
+        kryo.writeObject(output, this.clientIp)
+        kryo.writeObject(output, this.timestamp)
+        kryo.writeObject(output, this.phonePrefix)
+        kryo.writeObject(output, this.nickName)
+        kryo.writeObject(output, this.deviceId)
+        kryo.writeObject(output, this.deviceType)
+        kryo.writeObject(output, this.ssidMac)
+        kryo.writeObject(output, this.shortId)
     }
   
     override def read(kryo: Kryo, input: Input): Unit = {
-      this.id = kryo.readObject(input, classOf[String])
-      this.clientVersion = kryo.readObject(input, classOf[Long])
-      this.clientIp = kryo.readObject(input, classOf[String])
-      this.timestamp = kryo.readObject(input, classOf[Long])
-      this.phonePrefix = kryo.readObject(input, classOf[String])
-      this.nickName = kryo.readObject(input, classOf[String])
-      this.deviceId = kryo.readObject(input, classOf[String])
-      this.deviceType = kryo.readObject(input, classOf[String])
-      this.ssidMac = kryo.readObject(input, classOf[String])
-      this.shortId = kryo.readObject(input, classOf[Long])
+        this.id = kryo.readObject(input, classOf[String])
+        this.clientVersion = kryo.readObject(input, classOf[Long])
+        this.clientIp = kryo.readObject(input, classOf[String])
+        this.timestamp = kryo.readObject(input, classOf[Long])
+        this.phonePrefix = kryo.readObject(input, classOf[String])
+        this.nickName = kryo.readObject(input, classOf[String])
+        this.deviceId = kryo.readObject(input, classOf[String])
+        this.deviceType = kryo.readObject(input, classOf[String])
+        this.ssidMac = kryo.readObject(input, classOf[String])
+        this.shortId = kryo.readObject(input, classOf[Long])
     }
 }

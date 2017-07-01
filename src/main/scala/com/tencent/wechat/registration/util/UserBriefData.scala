@@ -13,6 +13,7 @@ class UserBriefData(userData : UserRegData) extends Serializable with KryoSerial
     var phonePrefix:    String = userData.phonePrefix
     var nickName:       String = userData.nickName
     var deviceId:       String = userData.deviceId
+    var deviceType:       String = userData.deviceType
     var ssidMac:        String = userData.ssidMac
   
     def this(uid : String) = {
@@ -24,7 +25,8 @@ class UserBriefData(userData : UserRegData) extends Serializable with KryoSerial
         "{id: " + id + "\t clientVersion: " + clientVersion.toString() + 
         "\t clientIp: " + clientIp + "\t timestamp: " + timestamp.toString() +
         "\t phonePrefix: " + phonePrefix + "\t nickName: " + nickName + 
-        "\t deviceId: " + deviceId + "\t ssidMac: " + ssidMac + "}"
+        "\t deviceId: " + deviceId + "\t ssidMac: " + "\t deviceType: " + 
+        deviceType + "\t ssidMac: " + ssidMac + "}"
     }
     
     override def write(kryo: Kryo, output: Output): Unit = {
@@ -35,6 +37,7 @@ class UserBriefData(userData : UserRegData) extends Serializable with KryoSerial
       kryo.writeObject(output, this.phonePrefix)
       kryo.writeObject(output, this.nickName)
       kryo.writeObject(output, this.deviceId)
+      kryo.writeObject(output, this.deviceType)
       kryo.writeObject(output, this.ssidMac)
     }
   
@@ -46,6 +49,7 @@ class UserBriefData(userData : UserRegData) extends Serializable with KryoSerial
       this.phonePrefix = kryo.readObject(input, classOf[String])
       this.nickName = kryo.readObject(input, classOf[String])
       this.deviceId = kryo.readObject(input, classOf[String])
+      this.deviceType = kryo.readObject(input, classOf[String])
       this.ssidMac = kryo.readObject(input, classOf[String])
     }
 }

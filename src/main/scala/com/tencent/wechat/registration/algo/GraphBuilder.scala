@@ -12,13 +12,15 @@ import scala.reflect.ClassTag
 import org.apache.spark.rdd.RDD
 import com.tencent.wechat.registration.util.UserBriefData
 import com.tencent.wechat.registration.util.UserBriefData
+import com.tencent.wechat.registration.preprocessing.OddFeatureContainer
+import org.apache.spark.graphx.PartitionStrategy
 
 object GraphBuilder {
   
-    def makeEdge(s: String, data: Iterable[UserRegData]) : TraversableOnce[Edge[Long]] = {
+    def makeEdge(s: String, data: Iterable[UserRegData]) : TraversableOnce[Edge[Double]] = {
         var u       = data.iterator
         var uu      = data.iterator
-        var res = ArrayBuffer[Edge[Long]]()
+        var res = ArrayBuffer[Edge[Double]]()
         if(data.size == 1 || s.length() == 0 || s == "0:0:0:0:0:0")
             res.iterator
         else while(u.hasNext) {
@@ -31,7 +33,7 @@ object GraphBuilder {
                 val value2    = uu.next()
                 if(value2.id != value1.id) {
                     val weight = WeightStrategy.weightCal(value1, value2)
-                    if(weight < 1) {
+                    if(weight >= 0.999999) {
                         if(value1.shortId < value2.shortId)
                             res += new Edge(value1.shortId, value2.shortId, weight)
                         else res += new Edge(value2.shortId, value1.shortId, weight)
@@ -45,7 +47,7 @@ object GraphBuilder {
     
     def buildGraph(
         sc : SparkContext, 
-        config : RConfig): (Graph[Long, Long], RDD[(Long, UserBriefData)]) = {
+        config : RConfig): (Graph[Long, Double], RDD[(Long, UserBriefData)]) = {
         val textFile = sc.textFile(config.inputFile);
         val header = textFile.first();
         val text_wo_head = textFile.filter(s => {s != header});
@@ -69,21 +71,26 @@ object GraphBuilder {
           });*/
 
        val ip_partition = data.groupBy(
-           t => FeaturePartition.partitionIP(t.clientIp));
-       //partition_featrue_data.groupBy(t -> t._1());
-       //
+           t => FeaturePartition.partitionIP(t.clientIp)).flatMap( t => makeEdge(t._1, t._2) )
+
        val device_partition = data.groupBy(
-           t => FeaturePartition.partitionDevice(t.deviceId));
+           t => FeaturePartition.partitionDeviceID(t.deviceId)).flatMap( t => makeEdge(t._1, t._2) )
        
        val wifi_partition = data.groupBy(
-           t => FeaturePartition.partitionDevice(t.ssidMac));
+           t => FeaturePartition.partitionWifi(t.ssidMac)).flatMap( t => makeEdge(t._1, t._2) )
            
+       val nickname_partition = data.groupBy(
+           t => FeaturePartition.partitionNickName(t.nickName)).flatMap( t => makeEdge(t._1, t._2) )
+           
+       data.unpersist(blocking = false)
        //this is the place where we save the relation between nodes
        //def typeConversionMethod = {String => Long = _.toLong}
-       val node_neightbors = ip_partition.flatMap( t => makeEdge(t._1, t._2) )
-                                         .union(device_partition.flatMap( t => makeEdge(t._1, t._2) ))
-                                         .union(wifi_partition.flatMap( t => makeEdge(t._1, t._2) )).distinct()
-       (Graph.fromEdges(node_neightbors, 0L), idmaps)
+       val node_neightbors = ip_partition.union(device_partition)
+                                         .union(wifi_partition)
+                                         .union(nickname_partition)
+       (Graph.fromEdges(node_neightbors, 0L)
+             .partitionBy(PartitionStrategy.EdgePartition2D)
+             .groupEdges((a,b) => a), idmaps)
        //.outerJoinVertices(vertices)(
        //(vid, data, att) => {
        //    att.getOrElse(new UserBriefData(new UserRegData("")))
@@ -92,19 +99,19 @@ object GraphBuilder {
     
     def buildTestGraph(
         sc : SparkContext, 
-        config : RConfig): (Graph[Long, Long], RDD[(Long, UserBriefData)]) = {
+        config : RConfig): (Graph[Long, Double], RDD[(Long, UserBriefData)]) = {
         val textFile = sc.textFile(config.testInputFile).cache()
         val node_neightbors = textFile.map(row => {
             val tokens = row.split(config.delimiter).map(_.trim())
             def typeConversionMethod: String => Long = _.toLong
             tokens.length match {
                 case 2 => new Edge(typeConversionMethod(tokens(0)),
-                  typeConversionMethod(tokens(1)), 1L)
+                  typeConversionMethod(tokens(1)), 1.0)
                 case 3 => new Edge(typeConversionMethod(tokens(0)),
-                  typeConversionMethod(tokens(1)), tokens(2).toLong)
+                  typeConversionMethod(tokens(1)), tokens(2).toDouble)
                 case _ => throw new IllegalArgumentException("invalid input line: " + row)
             }
-        })
+        }).distinct()
         val idmaps = node_neightbors.flatMap(edge => {
             var nodes = new ArrayBuffer[(Long, UserBriefData)]()
             nodes += ((edge.srcId.toLong, new UserBriefData(edge.srcId.toString())))

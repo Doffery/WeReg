@@ -24,7 +24,11 @@ case class RConfig (
 
 object MainFunc {
     def main(args: Array[String]): Unit ={
-        val config      = RConfig("file:///root/data/tip_plusid_t_tmp_reg_data_sync_to_data_visor_20170604.txt",
+        val config      = RConfig(
+//                                  "file:///D:/data/plusid_t_tmp_reg_data_sync_to_data_visor_20170604.txt",
+//                                  "file:///D:/data/output" + System.currentTimeMillis.toString(),
+//                                  "file:///D:/data/test_small_edges.csv"
+                                  "file:///root/data/tip_plusid_t_tmp_reg_data_sync_to_data_visor_20170604.txt",
                                   "file:///root/output/output" + System.currentTimeMillis.toString(),
                                   "file:///root/data/test_small_edges.csv"
                                   )

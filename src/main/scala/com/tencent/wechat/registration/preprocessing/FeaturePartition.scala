@@ -3,14 +3,16 @@ package com.tencent.wechat.registration.preprocessing
 object FeaturePartition {
     
     def ipParse24Prefix(sp : String) : String = {
-        sp.substring(0, sp.lastIndexOf('.'))
+        if(sp.lastIndexOf('.') != -1)
+            sp.substring(0, sp.lastIndexOf('.'))
+        else sp
     }
     
   	def partitionIP(ip : String) : String = {
   		  ipParse24Prefix(ip)
   	}
   	
-  	def partitionDevice(did : String) : String = {
+  	def partitionDeviceID(did : String) : String = {
   	    did
   	}
   	
@@ -18,7 +20,7 @@ object FeaturePartition {
   	    wifi
   	}
   	
-  	def nickName(name : String) : String = {
+  	def partitionNickName(name : String) : String = {
   	    name
   	}
 }

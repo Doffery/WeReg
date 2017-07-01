@@ -6,9 +6,9 @@ import com.esotericsoftware.kryo.Kryo
 import com.esotericsoftware.kryo.io.Input
 
 class LouvainVertex (var community: Long,
-    var communitySigmaTot: Long,
-    var internalWeight: Long,
-    var nodeWeight: Long,
+    var communitySigmaTot: Double,
+    var internalWeight: Double,
+    var nodeWeight: Double,
     var changed: Boolean,
     var preCommunity: Long) extends Serializable with KryoSerializable {
   
@@ -33,9 +33,9 @@ class LouvainVertex (var community: Long,
   
     override def read(kryo: Kryo, input: Input): Unit = {
         this.community = kryo.readObject(input, classOf[Long])
-        this.communitySigmaTot = kryo.readObject(input, classOf[Long])
-        this.internalWeight = kryo.readObject(input, classOf[Long])
-        this.nodeWeight = kryo.readObject(input, classOf[Long])
+        this.communitySigmaTot = kryo.readObject(input, classOf[Double])
+        this.internalWeight = kryo.readObject(input, classOf[Double])
+        this.nodeWeight = kryo.readObject(input, classOf[Double])
         this.changed = kryo.readObject(input, classOf[Boolean])
         this.preCommunity = kryo.readObject(input, classOf[Long])
         //this.userData = kryo.readObject(input, classOf[UserBriefData])

@@ -7,45 +7,39 @@ import com.tencent.wechat.registration.RConfig
 import com.tencent.wechat.registration.util.LouvainVertex
 import com.esotericsoftware.kryo.KryoSerializable
 import org.apache.spark.graphx.EdgeContext
-import com.tencent.wechat.registration.util.LouvainVertex
 import org.apache.spark.graphx.PartitionStrategy
-import com.tencent.wechat.registration.util.LouvainVertex
-import com.tencent.wechat.registration.util.LouvainVertex
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.graphx.VertexRDD
-import com.tencent.wechat.registration.util.LouvainVertex
 import org.apache.spark.graphx.Edge
-import com.tencent.wechat.registration.util.LouvainVertex
-import com.tencent.wechat.registration.util.LouvainVertex
 import com.tencent.wechat.registration.util.UserRegData
-import com.tencent.wechat.registration.util.UserBriefData
 import org.apache.spark.rdd.RDD
 import com.tencent.wechat.registration.util.UserBriefData
 
 class LouvainMethod extends Serializable{
-    def buildLouvainGraph[VD: ClassTag](graph : Graph[VD, Long]): Graph[LouvainVertex, Long] = {
+    def buildLouvainGraph[VD: ClassTag](graph : Graph[VD, Double]): Graph[LouvainVertex, Double] = {
         val weights    = graph.aggregateMessages(
-            (e: EdgeContext[VD, Long, Long]) => {
+            (e: EdgeContext[VD, Double, Double]) => {
               e.sendToSrc(e.attr)
               e.sendToDst(e.attr)
             },
-            (msg1: Long, msg2: Long) => msg1 + msg2)
+            (msg1: Double, msg2: Double) => msg1 + msg2)
             
         // The last groupEdges groups the duplicate edges and add them up
         graph.outerJoinVertices(weights)(
             (vid, data, att) => {
-                val weight  = att.getOrElse(0L)
+                val weight  = att.getOrElse(0.0)
                 new LouvainVertex(vid, weight, 0, weight, false, vid)
             }
-            ).partitionBy(PartitionStrategy.EdgePartition2D).groupEdges(_+_)
+            )//.partitionBy(PartitionStrategy.EdgePartition2D).groupEdges(_+_)
     }
     
 
+
     /**
-      * Creates the messages passed between each vertex to convey neighborhood community data.
-      * Send messgae to both direction of the edges
+      * Creates the messages passed between each vertex to convey
+      neighborhood community data.
       */
-    def sendCommunityData(e: EdgeContext[LouvainVertex, Long, Map[(Long, Long), Long]]) = {
+    def sendCommunityData(e: EdgeContext[LouvainVertex, Double, Map[(Long, Double), Double]]) = {
         val m1 = (Map((e.srcAttr.community, e.srcAttr.communitySigmaTot) -> e.attr))
         val m2 = (Map((e.dstAttr.community, e.dstAttr.communitySigmaTot) -> e.attr))
         e.sendToSrc(m2)
@@ -54,11 +48,9 @@ class LouvainMethod extends Serializable{
   
     /**
       * Merge neighborhood community data into a single message for each vertex
-      * The message we finally get is a map,
-      * using community id and tot as key, the weights ki.in as value
       */
-    def mergeCommunityMessages(m1: Map[(Long, Long), Long], m2: Map[(Long, Long), Long]) = {
-        val newMap = scala.collection.mutable.HashMap[(Long, Long), Long]()
+    def mergeCommunityMessages(m1: Map[(Long, Double), Double], m2: Map[(Long, Double), Double]) = {
+        val newMap = scala.collection.mutable.HashMap[(Long, Double), Double]()
     
         m1.foreach({ case (k, v) =>
             if (newMap.contains(k)) newMap(k) = newMap(k) + v
@@ -81,11 +73,11 @@ class LouvainMethod extends Serializable{
     def modularityGain(
         currCommunityId: Long,
         testCommunityId: Long,
-        testSigmaTot: Long,
-        edgeWeightInCommunity: Long,
-        nodeWeight: Long,
-        internalWeight: Long,
-        totalEdgeWeight: Long): BigDecimal = {
+        testSigmaTot: Double,
+        edgeWeightInCommunity: Double,
+        nodeWeight: Double,
+        internalWeight: Double,
+        totalEdgeWeight: Double): BigDecimal = {
     
         // this constant variable indicate this is checking adding a node or removing
         val isCurrentCommunity = currCommunityId.equals(testCommunityId)
@@ -112,9 +104,9 @@ class LouvainMethod extends Serializable{
       * Returns a new set of vertices with the updated vertex state.
       */
     def louvainVertJoin(
-        louvainGraph: Graph[LouvainVertex, Long],
-        msgRDD: VertexRDD[Map[(Long, Long), Long]],
-        totalEdgeWeight: Broadcast[Long],
+        louvainGraph: Graph[LouvainVertex, Double],
+        msgRDD: VertexRDD[Map[(Long, Double), Double]],
+        totalEdgeWeight: Broadcast[Double],
         even: Boolean): VertexRDD[LouvainVertex] = {
     
         // innerJoin[U, VD2](other: RDD[(VertexId, U)])(f: (VertexId, VD, U) => VD2): VertexRDD[VD2]
@@ -122,7 +114,7 @@ class LouvainMethod extends Serializable{
             var bestCommunity = louvainData.community
             val startingCommunityId = bestCommunity
             var maxDeltaQ = BigDecimal(0.0);
-            var bestSigmaTot = 0L
+            var bestSigmaTot = 0.0
             // louvainData.preCommunity = louvainData.community // not here
       
             // VertexRDD[scala.collection.immutable.Map[(Long, Long),Long]]
@@ -171,9 +163,9 @@ class LouvainMethod extends Serializable{
     
     def findCommunity(
         sc: SparkContext,
-        graph: Graph[LouvainVertex, Long],
+        graph: Graph[LouvainVertex, Double],
         minProgress: Int = 1,
-        progressCounter: Int = 1): (Double, Graph[LouvainVertex, Long], Int) = {
+        progressCounter: Int = 1): (Double, Graph[LouvainVertex, Double], Int) = {
         
         // record the last community id
         var louvainGraph = graph.mapVertices((vid, lv) => {
@@ -293,12 +285,12 @@ class LouvainMethod extends Serializable{
                   val community = louvainData.community
                   var accumulatedInternalWeight = louvainData.internalWeight
                   val sigmaTot = louvainData.communitySigmaTot.toDouble
-                  def accumulateTotalWeight(totalWeight: Long, item: ((Long, Long), Long)) = {
-                    val ((communityId, sigmaTotal), communityEdgeWeight) = item
-                    if (louvainData.community == communityId)
-                      totalWeight + communityEdgeWeight
-                    else
-                      totalWeight
+                  def accumulateTotalWeight(totalWeight: Double, item: ((Long, Double), Double)) = {
+                      val ((communityId, sigmaTotal), communityEdgeWeight) = item
+                      if (louvainData.community == communityId)
+                          totalWeight + communityEdgeWeight
+                      else
+                          totalWeight
                   }
           
                   accumulatedInternalWeight = communityMap.foldLeft(accumulatedInternalWeight)(accumulateTotalWeight)
@@ -320,8 +312,8 @@ class LouvainMethod extends Serializable{
     }
     
     def compressGraph(
-        graph: Graph[LouvainVertex, Long], 
-        debug: Boolean = true): Graph[LouvainVertex, Long] = {
+        graph: Graph[LouvainVertex, Double], 
+        debug: Boolean = true): Graph[LouvainVertex, Double] = {
         // aggregate the edge weights of self loops. edges with both src and dst in the same community.
         // WARNING  can not use graph.mapReduceTriplets because we are mapping to new vertexIds
         val internalEdgeWeights = graph.triplets.flatMap(et => {
@@ -338,7 +330,7 @@ class LouvainMethod extends Serializable{
     
         // join internal weights and self edges to find new interal weight of each community
         val newVertices = internalWeights.leftOuterJoin(internalEdgeWeights).map({ case (vid, (weight1, weight2Option)) =>
-            val weight2 = weight2Option.getOrElse(0L)
+            val weight2 = weight2Option.getOrElse(0.0)
             val state = new LouvainVertex()
             state.community = vid
             state.changed = false
@@ -363,17 +355,17 @@ class LouvainMethod extends Serializable{
     
         // calculate the weighted degree of each node
         val nodeWeights = compressedGraph.aggregateMessages(
-            (e:EdgeContext[LouvainVertex,Long,Long]) => {
+            (e:EdgeContext[LouvainVertex,Double,Double]) => {
                 e.sendToSrc(e.attr)
                 e.sendToDst(e.attr)
             },
-            (e1: Long, e2: Long) => e1 + e2
+            (e1: Double, e2: Double) => e1 + e2
         )
     
         // fill in the weighted degree of each node
         // val louvainGraph = compressedGraph.joinVertices(nodeWeights)((vid,data,weight)=> {
         val louvainGraph = compressedGraph.outerJoinVertices(nodeWeights)((vid, data, weightOption) => {
-            val weight = weightOption.getOrElse(0L)
+            val weight = weightOption.getOrElse(0.0)
             data.communitySigmaTot = weight + data.internalWeight
             data.nodeWeight = weight
             data
@@ -392,7 +384,7 @@ class LouvainMethod extends Serializable{
         config: RConfig,
         level: Int,
         qValues: Array[(Int, Double)],
-        graph: Graph[LouvainVertex, Long]) = {
+        graph: Graph[LouvainVertex, Double]) = {
     
         val vertexSavePath = config.outputFile + "/level_" + level + "_vertices"
         val edgeSavePath = config.outputFile + "/level_" + level + "_edges"
@@ -414,7 +406,7 @@ class LouvainMethod extends Serializable{
     }
     
     def run[VD : ClassTag](
-        graph : Graph[VD, Long], 
+        graph : Graph[VD, Double], 
         idMaps : RDD[(Long, UserBriefData)],
         sc : SparkContext, 
         config : RConfig): Unit = {
